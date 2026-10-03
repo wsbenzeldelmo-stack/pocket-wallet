@@ -1,5 +1,6 @@
+
 export type CardKind = 'E-Wallet' | 'Bank' | 'Cash' | 'Savings' | 'Custom'
-export type TxKind = 'expense' | 'income' | 'transfer' | 'debt-payment' | 'repayment'
+export type TxKind = 'expense' | 'income' | 'transfer' | 'adjustment' | 'debt-payment' | 'repayment'
 
 export interface WalletCard {
   id: string
@@ -8,6 +9,8 @@ export interface WalletCard {
   balance: number
   theme: string
   order: number
+  last4?: string
+  archived?: boolean
 }
 
 export interface Tx {
@@ -19,6 +22,9 @@ export interface Tx {
   cardId?: string
   fromId?: string
   toId?: string
+  debtId?: string
+  note?: string
+  delta?: number
   createdAt: string
 }
 
@@ -27,6 +33,17 @@ export interface Goal {
   name: string
   target: number
   current: number
+  linkedCardId?: string
+  targetDate?: string
+  icon?: string
+}
+
+export interface DebtPayment {
+  id: string
+  txId: string
+  amount: number
+  cardId: string
+  createdAt: string
 }
 
 export interface Debt {
@@ -36,6 +53,8 @@ export interface Debt {
   original: number
   remaining: number
   due?: string
+  note?: string
+  payments: DebtPayment[]
 }
 
 export interface PinRecord {
@@ -49,6 +68,7 @@ export interface WalletState {
     currency: string
     onboarded: boolean
     hideBalances: boolean
+    hideOnOpen?: boolean
     pin?: PinRecord
   }
   cards: WalletCard[]
@@ -65,13 +85,33 @@ function openDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, 1)
     request.onupgradeneeded = () => {
-      if (!request.result.objectStoreNames.contains(STORE)) {
-        request.result.createObjectStore(STORE)
-      }
+      if (!request.result.objectStoreNames.contains(STORE)) request.result.createObjectStore(STORE)
     }
     request.onsuccess = () => resolve(request.result)
     request.onerror = () => reject(request.error)
   })
+}
+
+function normalizeWallet(input: WalletState): WalletState {
+  return {
+    ...input,
+    profile: {
+      name: input.profile?.name || '',
+      currency: input.profile?.currency || 'PHP',
+      onboarded: Boolean(input.profile?.onboarded),
+      hideBalances: Boolean(input.profile?.hideBalances),
+      hideOnOpen: Boolean(input.profile?.hideOnOpen),
+      pin: input.profile?.pin,
+    },
+    cards: (input.cards || []).map((card, index) => ({
+      ...card,
+      order: Number.isFinite(card.order) ? card.order : index,
+      archived: Boolean(card.archived),
+    })),
+    txs: input.txs || [],
+    goals: (input.goals || []).map((goal) => ({ ...goal, current: Number(goal.current || 0) })),
+    debts: (input.debts || []).map((debt) => ({ ...debt, payments: debt.payments || [] })),
+  }
 }
 
 export async function loadWallet(): Promise<WalletState | null> {
@@ -82,7 +122,7 @@ export async function loadWallet(): Promise<WalletState | null> {
     req.onerror = () => reject(req.error)
   })
   db.close()
-  return result || null
+  return result ? normalizeWallet(result) : null
 }
 
 export async function saveWallet(state: WalletState): Promise<void> {
@@ -108,6 +148,7 @@ export async function resetWallet(): Promise<void> {
 }
 
 const encoder = new TextEncoder()
+const decoder = new TextDecoder()
 
 function to64(bytes: Uint8Array): string {
   let value = ''
@@ -122,9 +163,9 @@ function from64(value: string): Uint8Array {
 async function derivePin(pin: string, salt: Uint8Array): Promise<Uint8Array> {
   const key = await crypto.subtle.importKey('raw', encoder.encode(pin), 'PBKDF2', false, ['deriveBits'])
   const bits = await crypto.subtle.deriveBits(
-    { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 150000 },
+    { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 175000 },
     key,
-    256
+    256,
   )
   return new Uint8Array(bits)
 }
@@ -139,6 +180,44 @@ export async function checkPin(pin: string, record: PinRecord): Promise<boolean>
   const expected = from64(record.hash)
   if (actual.length !== expected.length) return false
   let diff = 0
-  for (let i = 0; i < actual.length; i += 1) diff |= actual[i] ^ expected[i]
+  for (let index = 0; index < actual.length; index += 1) diff |= actual[index] ^ expected[index]
   return diff === 0
+}
+
+async function deriveBackupKey(password: string, salt: Uint8Array, usages: KeyUsage[]): Promise<CryptoKey> {
+  const source = await crypto.subtle.importKey('raw', encoder.encode(password), 'PBKDF2', false, ['deriveKey'])
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 250000 },
+    source,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    usages,
+  )
+}
+
+export async function encryptBackup(state: WalletState, password: string): Promise<string> {
+  const salt = crypto.getRandomValues(new Uint8Array(16))
+  const iv = crypto.getRandomValues(new Uint8Array(12))
+  const key = await deriveBackupKey(password, salt, ['encrypt'])
+  const payload = encoder.encode(JSON.stringify({ version: 1, state }))
+  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, payload)
+  return JSON.stringify({
+    format: 'pocket-wallet-encrypted-backup',
+    version: 1,
+    salt: to64(salt),
+    iv: to64(iv),
+    data: to64(new Uint8Array(encrypted)),
+  })
+}
+
+export async function decryptBackup(content: string, password: string): Promise<WalletState> {
+  const parsed = JSON.parse(content) as { format?: string; salt: string; iv: string; data: string }
+  if (parsed.format !== 'pocket-wallet-encrypted-backup') throw new Error('Not a Pocket Wallet encrypted backup.')
+  const salt = from64(parsed.salt)
+  const iv = from64(parsed.iv)
+  const key = await deriveBackupKey(password, salt, ['decrypt'])
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, from64(parsed.data))
+  const decoded = JSON.parse(decoder.decode(plain)) as { state?: WalletState }
+  if (!decoded.state) throw new Error('Backup is missing wallet data.')
+  return normalizeWallet(decoded.state)
 }
