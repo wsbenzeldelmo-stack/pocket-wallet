@@ -23,6 +23,7 @@ export interface Tx {
   fromId?: string
   toId?: string
   debtId?: string
+  goalId?: string
   note?: string
   delta?: number
   createdAt: string
