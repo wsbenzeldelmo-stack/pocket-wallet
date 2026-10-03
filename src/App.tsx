@@ -290,7 +290,7 @@ function GoalsPage({ state, money, onGoal, onDebt }: { state: WalletState; money
   const owed = state.debts.filter((d) => d.direction === 'owedToMe' && d.remaining > 0)
   return <section className="page"><span className="eyebrow">Plans & people</span><h2>Goals</h2><p>Keep savings, money you owe, and money owed to you separate from everyday spending.</p>
     <div className="section-head sub"><h3>Savings goals</h3><button className="text-btn" onClick={onGoal}><Plus/> New goal</button></div>
-    <div className="goal-grid">{state.goals.length ? state.goals.map((goal) => <GoalCard key={goal.id} goal={goal} money={money}/>) : <Empty text="No savings goals yet."/ >}</div>
+    <div className="goal-grid">{state.goals.length ? state.goals.map((goal) => <GoalCard key={goal.id} goal={goal} money={money}/>) : <Empty text="No savings goals yet."/>}</div>
     <div className="section-head sub"><h3>People & debts</h3><button className="text-btn" onClick={onDebt}><Plus/> Add record</button></div>
     <div className="debt-grid"><DebtCard title="I owe" items={owe} money={money}/><DebtCard title="Owed to me" items={owed} money={money}/></div>
   </section>
