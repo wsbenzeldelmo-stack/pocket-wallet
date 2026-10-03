@@ -20,6 +20,10 @@ export function deleteTransaction(state: WalletState, txId: string): WalletState
   if (!tx) return state
   const cards = applyTxToCards(state.cards, tx, -1)
   let debts = state.debts
+  let goals = state.goals
+  if (tx.kind === 'transfer' && tx.goalId) {
+    goals = state.goals.map((goal) => goal.id === tx.goalId ? { ...goal, current: Math.max(0, goal.current - tx.amount) } : goal)
+  }
   if ((tx.kind === 'debt-payment' || tx.kind === 'repayment') && tx.debtId) {
     debts = state.debts.map((debt) => debt.id === tx.debtId
       ? {
@@ -29,7 +33,7 @@ export function deleteTransaction(state: WalletState, txId: string): WalletState
         }
       : debt)
   }
-  return { ...state, cards, debts, txs: state.txs.filter((item) => item.id !== txId) }
+  return { ...state, cards, debts, goals, txs: state.txs.filter((item) => item.id !== txId) }
 }
 
 export function replaceTransaction(state: WalletState, previous: Tx, next: Tx): WalletState {
