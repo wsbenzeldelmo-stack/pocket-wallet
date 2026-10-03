@@ -1,39 +1,52 @@
 # Pocket Wallet
 
-A local-first personal finance tracker inspired by the simplicity of Apple Wallet.
+A local-first personal finance wallet with a calm Apple Wallet-inspired UI.
 
-## Product idea
+## Stack
 
-Your wallet contains cards. Each card represents a place where your money lives — GCash, BPI, cash, savings, or any custom account. Expenses, income, transfers, goals, and debts are tracked around those cards.
-
-## V1 architecture
-
-- Responsive web app / PWA
-- Vanilla HTML, CSS, and JavaScript modules
+- React 19 + TypeScript
+- Vite
 - IndexedDB for local financial data
-- Web Crypto for PIN verification
-- Service Worker for offline use
-- No Supabase and no cloud database
-- Vercel for static hosting
+- Web Crypto PBKDF2 for optional 6-digit PIN protection
+- Vite PWA / Workbox for installable offline use
+- Lucide icons
+- Custom responsive CSS design system
+- Vercel for hosting
 
-Financial records stay in the browser on the device. Vercel serves the app files only.
+There is **no backend and no Supabase** in V1. Financial records remain in the browser on the current device.
 
-## Core V1 flows
+## Core V1
 
-- Onboarding: name, currency, starting balances, optional 6-digit PIN
-- Wallet: create and reorder personal money cards
-- Transactions: expenses and income per card
-- Transfers: move money between cards without changing total balance
-- Activity: unified transaction history
-- Goals: savings targets and debt overview
-- Insights: monthly income, spending, and net change
-- Privacy: hide balances and local app lock
-- Offline support through a service worker
+- Guided onboarding: name, currency, starting balances, optional PIN
+- Wallet cards for GCash, banks, cash, savings, and custom money locations
+- Expenses and income per card
+- Card-to-card transfers that preserve total wallet balance
+- Unified activity history
+- Savings goals
+- I owe and Owed to me records
+- Monthly insights and category totals
+- Balance privacy toggle
+- Offline-installable PWA shell
 
-## Development
+## UX laws applied
 
-This project intentionally uses no build step for the first version. Open `index.html` with a local static server, or deploy the repository directly to Vercel.
+- **Hick's Law:** only three primary quick actions on Wallet.
+- **Miller's Law:** four top-level destinations on mobile.
+- **Fitts's Law:** large touch targets and thumb-friendly mobile actions.
+- **Jakob's Law:** familiar wallet, card, transaction, and transfer metaphors.
+- **Progressive disclosure:** secondary actions live in sheets or their relevant page.
+- **Error prevention:** card transfers validate distinct cards and available balance; expenses cannot exceed the selected card balance.
+- **Aesthetic-usability effect:** consistent 8px-derived spacing, restrained gradients, soft surfaces, and limited visual noise.
 
-## Data note
+## Local development
 
-Do not commit personal financial exports or backups to this repository.
+    npm install
+    npm run dev
+
+Production build:
+
+    npm run build
+
+## Privacy
+
+Do not commit financial exports or backup files to this repository.
