@@ -132,6 +132,12 @@ export default function App() {
     const hasHistory = state.txs.some((tx) => tx.cardId === cardId || tx.fromId === cardId || tx.toId === cardId)
     const target = state.cards.find((card) => card.id === cardId)
     if (!target) return
+    if (target.archived) {
+      mutate((current) => ({ ...current, cards: current.cards.map((card) => card.id === cardId ? { ...card, archived: false } : card) }))
+      setSelectedCardId(cardId)
+      setSheet(null)
+      return
+    }
     if (hasHistory) {
       if (!window.confirm(`${target.name} has transaction history, so it will be archived instead of deleted. Continue?`)) return
       mutate((current) => ({ ...current, cards: current.cards.map((card) => card.id === cardId ? { ...card, archived: true } : card) }))
@@ -468,7 +474,7 @@ function EditCardForm({ card, onSave, onAdjust, onArchive }: { card: WalletCard;
   const [kind, setKind] = useState<CardKind>(card.kind)
   const [theme, setTheme] = useState(card.theme)
   const [last4, setLast4] = useState(card.last4 || '')
-  return <form onSubmit={(event) => { event.preventDefault(); onSave({ name: name.trim() || card.name, kind, theme, last4: last4.slice(-4) }) }}><span className="eyebrow">Card settings</span><h2>{card.name}</h2><Field label="Card name"><input value={name} onChange={(event) => setName(event.target.value)}/></Field><Field label="Type"><select value={kind} onChange={(event) => setKind(event.target.value as CardKind)}><option>E-Wallet</option><option>Bank</option><option>Cash</option><option>Savings</option><option>Custom</option></select></Field><Field label="Last 4 digits"><input inputMode="numeric" maxLength={4} value={last4} onChange={(event) => setLast4(event.target.value.replace(/\D/g,'').slice(0,4))}/></Field><ThemePicker theme={theme} onChange={setTheme}/><button className="btn primary full">Save changes</button><button className="btn secondary full" type="button" onClick={onAdjust}>Adjust balance</button><button className="danger full-action" type="button" onClick={onArchive}><Archive/> Archive / delete card</button></form>
+  return <form onSubmit={(event) => { event.preventDefault(); onSave({ name: name.trim() || card.name, kind, theme, last4: last4.slice(-4) }) }}><span className="eyebrow">Card settings</span><h2>{card.name}</h2><Field label="Card name"><input value={name} onChange={(event) => setName(event.target.value)}/></Field><Field label="Type"><select value={kind} onChange={(event) => setKind(event.target.value as CardKind)}><option>E-Wallet</option><option>Bank</option><option>Cash</option><option>Savings</option><option>Custom</option></select></Field><Field label="Last 4 digits"><input inputMode="numeric" maxLength={4} value={last4} onChange={(event) => setLast4(event.target.value.replace(/\D/g,'').slice(0,4))}/></Field><ThemePicker theme={theme} onChange={setTheme}/><button className="btn primary full">Save changes</button><button className="btn secondary full" type="button" onClick={onAdjust}>Adjust balance</button><button className={card.archived ? "btn secondary full" : "danger full-action"} type="button" onClick={onArchive}><Archive/> {card.archived ? "Restore card" : "Archive / delete card"}</button></form>
 }
 
 function ThemePicker({ theme, onChange }: { theme: string; onChange: (theme: string) => void }) {
