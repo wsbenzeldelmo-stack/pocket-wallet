@@ -97,7 +97,7 @@ export default function App() {
   if (!state.profile.onboarded) return <Onboarding onDone={(next) => {
     setState(next)
     setSelectedCardId(next.cards[0]?.id || '')
-    setLocked(Boolean(next.profile.pin))
+    setLocked(false)
   }}/>
   if (locked && state.profile.pin) {
     return <LockScreen name={state.profile.name} onUnlock={async (pin) => {
@@ -196,7 +196,7 @@ export default function App() {
   const depositGoal = (goalId: string, fromId: string, amount: number) => {
     const goal = state.goals.find((item) => item.id === goalId)
     if (!goal?.linkedCardId) return
-    const tx: Tx = { id: id(), kind: 'transfer', amount, fromId, toId: goal.linkedCardId, title: `Saved for ${goal.name}`, createdAt: now() }
+    const tx: Tx = { id: id(), kind: 'transfer', amount, fromId, toId: goal.linkedCardId, goalId, title: `Saved for ${goal.name}`, createdAt: now() }
     mutate((current) => ({
       ...current,
       cards: applyTxToCards(current.cards, tx),
@@ -360,7 +360,7 @@ function Onboarding({ onDone }: { onDone: (state: WalletState) => void }) {
 
     <div className="onboard-panel">
       <div className="onboard-progress"><span>{step + 1} of 3</span><div><i style={{ width: `${((step + 1) / 3) * 100}%` }}/></div></div>
-      {step === 0 && <div className="onboard-step"><span className="eyebrow">Welcome</span><h1>Your money, in one place.</h1><p>Start with the basics. You can change these later.</p><Field label="Your name"><input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Alex"/></Field><button className="setting-row" type="button"><span><small>Currency</small><b>{currency === 'PHP' ? 'Philippine Peso (₱)' : currency === 'USD' ? 'US Dollar ($)' : 'Euro (€)'}</b></span><select aria-label="Currency" value={currency} onChange={(event) => setCurrency(event.target.value)}><option value="PHP">PHP</option><option value="USD">USD</option><option value="EUR">EUR</option></select></button></div>}
+      {step === 0 && <div className="onboard-step"><span className="eyebrow">Welcome</span><h1>Your money, in one place.</h1><p>Start with the basics. You can change these later.</p><Field label="Your name"><input autoFocus value={name} onChange={(event) => setName(event.target.value)} placeholder="Alex"/></Field><div className="setting-row"><span><small>Currency</small><b>{currency === 'PHP' ? 'Philippine Peso (₱)' : currency === 'USD' ? 'US Dollar ($)' : 'Euro (€)'}</b></span><select aria-label="Currency" value={currency} onChange={(event) => setCurrency(event.target.value)}><option value="PHP">PHP</option><option value="USD">USD</option><option value="EUR">EUR</option></select></div></div>}
       {step === 1 && <div className="onboard-step"><span className="eyebrow">Build your wallet</span><h1>Where is your money?</h1><p>Add only the places you actually use. Your total updates as you type.</p><div className="account-picker">{accounts.map((account) => <div className={`setup-account${account.selected ? ' selected' : ''}`} key={account.key}><button className="setup-toggle" type="button" onClick={() => setAccounts((current) => current.map((item) => item.key === account.key ? { ...item, selected: !item.selected } : item))}><span className={`account-icon theme-${account.theme}`}>{cardIcon(account.kind)}</span><span><b>{account.name}</b><small>{account.kind}</small></span><span className="check-circle">{account.selected && <Check/>}</span></button>{account.selected && <div className="setup-balance"><span>{currency === 'PHP' ? '₱' : currency === 'USD' ? '$' : '€'}</span><input aria-label={`${account.name} starting balance`} type="number" min="0" step="0.01" value={account.balance} onChange={(event) => setAccounts((current) => current.map((item) => item.key === account.key ? { ...item, balance: Number(event.target.value) } : item))}/></div>}</div>)}</div><div className="custom-account"><input value={customName} onChange={(event) => setCustomName(event.target.value)} placeholder="Add another account"/><select value={customKind} onChange={(event) => setCustomKind(event.target.value as CardKind)}><option>Bank</option><option>E-Wallet</option><option>Cash</option><option>Savings</option><option>Custom</option></select><button type="button" onClick={addCustom}><Plus/></button></div><div className="starting-total"><span>Total starting money</span><b>{formatter.format(total)}</b></div></div>}
       {step === 2 && <div className="onboard-step"><span className="eyebrow">Privacy</span><h1>Protect your wallet.</h1><p>Your data stays on this device. Add an optional PIN and choose how balances appear when Pocket Wallet opens.</p><Field label="6-digit PIN (optional)"><input type="password" inputMode="numeric" maxLength={6} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0,6))} placeholder="••••••"/></Field><Field label="Confirm PIN"><input type="password" inputMode="numeric" maxLength={6} value={confirmPin} onChange={(event) => setConfirmPin(event.target.value.replace(/\D/g, '').slice(0,6))} placeholder="••••••"/></Field><label className="toggle-row"><span><b>Hide balances on open</b><small>Tap the eye icon when you want to reveal them.</small></span><input type="checkbox" checked={hideOnOpen} onChange={(event) => setHideOnOpen(event.target.checked)}/></label><div className="finish-summary"><div><small>Total</small><b>{formatter.format(total)}</b></div><div><small>Cards</small><b>{selectedAccounts.length}</b></div><div><small>Protection</small><b>{pin ? 'PIN' : 'Device only'}</b></div></div>{error && <div className="error">{error}</div>}</div>}
       <div className="onboard-actions">{step > 0 && <button className="btn ghost" onClick={() => { setError(''); setStep(step - 1) }}><ArrowLeft/> Back</button>}<button className="btn primary" onClick={() => step < 2 ? setStep(step + 1) : finish()}>{step < 2 ? <>Continue <ArrowRight/></> : <>Open My Wallet <ArrowRight/></>}</button></div>
@@ -512,7 +512,7 @@ function TransferForm({ currency, cards, defaultFromId, onSubmit }: { currency: 
 }
 
 function TransactionDetail({ tx, state, money, onUpdate, onDelete }: { tx: Tx; state: WalletState; money: (value: number) => string; onUpdate: (previous: Tx, next: Tx) => void; onDelete: () => void }) {
-  const editable = tx.kind === 'expense' || tx.kind === 'income' || tx.kind === 'transfer'
+  const editable = tx.kind === 'expense' || tx.kind === 'income' || (tx.kind === 'transfer' && !tx.goalId)
   const [editing, setEditing] = useState(false)
   const [amount, setAmount] = useState(String(tx.amount))
   const [cardId, setCardId] = useState(tx.cardId || '')
